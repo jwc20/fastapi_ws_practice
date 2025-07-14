@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Chat Room</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            text-align: center;
+        }
+        h1 {
+            color: #333;
+        }
+        .room-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .room-info {
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        .messages-container {
+            height: 400px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin: 20px 0;
+            background-color: #fafafa;
+            text-align: left;
+        }
+        .message-form {
+            display: flex;
+            gap: 10px;
+            margin: 20px 0;
+        }
+        .message-input {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            font-size: 14px;
+        }
+        .btn {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .btn:hover {
+            background-color: #0056b3;
+        }
+        .btn-secondary {
+            background-color: #6c757d;
+        }
+        .btn-secondary:hover {
+            background-color: #5a6268;
+        }
+        .btn-danger {
+            background-color: #dc3545;
+        }
+        .btn-danger:hover {
+            background-color: #c82333;
+        }
+        .message {
+            margin: 5px 0;
+            padding: 5px;
+            border-radius: 3px;
+        }
+        .message.own {
+            background-color: #e3f2fd;
+            text-align: right;
+        }
+        .message.other {
+            background-color: #f5f5f5;
+        }
+        .connection-status {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 3px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .connected {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .disconnected {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .error {
+            color: red;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="room-header">
+        <button class="btn btn-secondary" onclick="goToLobby()">← Back to Lobby</button>
+        <h1>Chat Room</h1>
+        <button class="btn btn-danger" onclick="leaveRoom()">Leave Room</button>
+    </div>
+
+    <div class="room-info">
+        <h2>Room: <span id="room-name"></span></h2>
+        <p>Your ID: <span id="ws-id"></span></p>
+        <p>Status: <span id="connection-status" class="connection-status disconnected">Disconnected</span></p>
+    </div>
+
+    <div id="messages" class="messages-container"></div>
+
+    <form class="message-form" onsubmit="sendMessage(event)">
+        <input type="text" id="messageText" class="message-input" placeholder="Type your message..." autocomplete="off" />
+        <button type="submit" class="btn">Send</button>
+    </form>
+
+    <div id="error-message" class="error"></div>
+
+    <script>
+        var client_id = Date.now();
+        var ws = null;
+        var roomName = null;
+        var reconnectInterval = null;
+
+        // Get room name from URL parameters
+        function getRoomFromURL() {
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get('room');
+        }
+
+        // Initialize the page
+        function init() {
+            roomName = getRoomFromURL();
+            if (!roomName) {
+                document.getElementById('error-message').textContent = 'No room specified';
+                return;
+            }
+
+            document.getElementById('room-name').textContent = roomName;
+            document.getElementById('ws-id').textContent = client_id;
+            connectWebSocket();
+        }
+
+        // Connect to WebSocket
+        function connectWebSocket() {
+            try {
+                ws = new WebSocket(`ws://localhost:8000/ws/${client_id}/${encodeURIComponent(roomName)}`);
+                
+                ws.onopen = function(event) {
+                    console.log('Connected to WebSocket');
+                    updateConnectionStatus(true);
+                    clearInterval(reconnectInterval);
+                };
+
+                ws.onmessage = function(event) {
+                    var messages = document.getElementById('messages');
+                    var message = document.createElement('div');
+                    message.className = 'message other';
+                    
+                    // Parse message if it's JSON format with sender info
+                    try {
+                        var messageData = JSON.parse(event.data);
+                        if (messageData.sender_id === client_id) {
+                            message.className = 'message own';
+                        }
+                        message.textContent = messageData.message || event.data;
+                    } catch (e) {
+                        // If not JSON, treat as plain text
+                        message.textContent = event.data;
+                    }
+                    
+                    messages.appendChild(message);
+                    messages.scrollTop = messages.scrollHeight;
+                };
+
+                ws.onclose = function(event) {
+                    console.log('WebSocket connection closed');
+                    updateConnectionStatus(false);
+                    // Attempt to reconnect every 3 seconds
+                    reconnectInterval = setInterval(connectWebSocket, 3000);
+                };
+
+                ws.onerror = function(error) {
+                    console.error('WebSocket error:', error);
+                    updateConnectionStatus(false);
+                };
+            } catch (error) {
+                console.error('Error connecting to WebSocket:', error);
+                updateConnectionStatus(false);
+            }
+        }
+
+        // Update connection status display
+        function updateConnectionStatus(connected) {
+            const statusElement = document.getElementById('connection-status');
+            if (connected) {
+                statusElement.textContent = 'Connected';
+                statusElement.className = 'connection-status connected';
+            } else {
+                statusElement.textContent = 'Disconnected';
+                statusElement.className = 'connection-status disconnected';
+            }
+        }
+
+        // Send message
+        function sendMessage(event) {
+            event.preventDefault();
+            var input = document.getElementById('messageText');
+            var message = input.value.trim();
+            
+            if (message && ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(message);
+                input.value = '';
+            } else if (!message) {
+                // Do nothing for empty messages
+            } else {
+                document.getElementById('error-message').textContent = 'Not connected to chat room';
+            }
+        }
+
+        // Leave room
+        function leaveRoom() {
+            if (ws) {
+                ws.close();
+            }
+            clearInterval(reconnectInterval);
+            goToLobby();
+        }
+
+        // Go to lobby
+        function goToLobby() {
+            window.location.href = 'lobby.html';
+        }
+
+        // Initialize when page loads
+        window.onload = init;
+
+        // Clean up on page unload
+        window.onbeforeunload = function() {
+            if (ws) {
+                ws.close();
+            }
+            clearInterval(reconnectInterval);
+        };
+    </script>
+</body>
+</html>

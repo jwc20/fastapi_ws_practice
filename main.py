@@ -1,6 +1,30 @@
 import anyio
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+app = FastAPI()
+
+# origins = [
+#     "http://localhost.tiangolo.com",
+#     "https://localhost.tiangolo.com",
+#     "http://localhost",
+#     "http://localhost:8080",
+# ]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+@app.get("/")
+async def main():
+    return {"message": "Hello World"}
 
 from broadcaster import Broadcast
 
@@ -36,7 +60,15 @@ manager = ConnectionManager()
 
 @app.get("/")
 async def get():
-    return FileResponse("templates/index.html")
+    return FileResponse("templates/lobby.html")
+
+@app.post("/create-room")
+async def create_room():
+    print("create-room")
+
+@app.get("/rooms")
+async def get_rooms():
+    return ["1", "2"]
 
 
 @app.websocket("/ws/{client_id}")

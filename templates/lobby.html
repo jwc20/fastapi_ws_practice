@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Chat Lobby</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            text-align: center;
+        }
+        h1 {
+            color: #333;
+        }
+        .form-container {
+            margin: 20px 0;
+            padding: 20px;
+            background-color: #f9f9f9;
+            border-radius: 5px;
+        }
+        .form-group {
+            margin: 10px 0;
+        }
+        input[type="text"] {
+            padding: 8px;
+            width: 200px;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            font-size: 14px;
+        }
+        .btn {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            margin: 5px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .btn:hover {
+            background-color: #0056b3;
+        }
+        .btn-success {
+            background-color: #28a745;
+        }
+        .btn-success:hover {
+            background-color: #218838;
+        }
+        .rooms-container {
+            margin: 20px 0;
+            text-align: left;
+        }
+        .room-list {
+            list-style: none;
+            padding: 0;
+        }
+        .room-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            margin: 5px 0;
+            background-color: #f8f9fa;
+            border-radius: 3px;
+            border: 1px solid #dee2e6;
+        }
+        .room-name {
+            font-weight: bold;
+        }
+        .back-button {
+            background-color: #6c757d;
+            margin-bottom: 20px;
+        }
+        .back-button:hover {
+            background-color: #5a6268;
+        }
+        .error {
+            color: red;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <button class="btn back-button" onclick="goHome()">← Back to Home</button>
+    
+    <h1>Chat Lobby</h1>
+    
+    <div class="form-container">
+        <h2>Create New Room</h2>
+        <form onsubmit="createRoom(event)">
+            <div class="form-group">
+                <input type="text" id="roomName" placeholder="Enter room name" autocomplete="off" required />
+            </div>
+            <button type="submit" class="btn">Create Room</button>
+        </form>
+        <div id="error-message" class="error"></div>
+    </div>
+
+    <div class="rooms-container">
+        <h2>Available Rooms</h2>
+        <button class="btn" onclick="refreshRooms()">Refresh Rooms</button>
+        <ul id="rooms" class="room-list"></ul>
+    </div>
+
+    <script>
+        // Load rooms when page loads
+        window.onload = function() {
+            refreshRooms();
+        };
+
+        async function createRoom(event) {
+            event.preventDefault();
+            const roomNameInput = document.getElementById('roomName');
+            const roomName = roomNameInput.value.trim();
+            const errorDiv = document.getElementById('error-message');
+            
+            if (!roomName) {
+                errorDiv.textContent = 'Room name is required';
+                return;
+            }
+
+            try {
+                const response = await fetch('http://localhost:8000/create-room', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ room_name: roomName })
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    roomNameInput.value = '';
+                    errorDiv.textContent = '';
+                    refreshRooms(); // Refresh the room list
+                } else {
+                    const error = await response.json();
+                    errorDiv.textContent = error.detail || 'Failed to create room';
+                }
+            } catch (error) {
+                console.error('Error creating room:', error);
+                errorDiv.textContent = 'Error creating room. Please try again.';
+            }
+        }
+
+        async function refreshRooms() {
+            const roomsList = document.getElementById('rooms');
+            
+            try {
+                const response = await fetch('http://localhost:8000/rooms');
+                if (response.ok) {
+                    const rooms = await response.json();
+                    roomsList.innerHTML = '';
+                    
+                    if (rooms.length === 0) {
+                        roomsList.innerHTML = '<li class="room-item">No rooms available</li>';
+                    } else {
+                        rooms.forEach(room => {
+                            const roomItem = document.createElement('li');
+                            roomItem.className = 'room-item';
+                            roomItem.innerHTML = `
+                                <span class="room-name">${room.name}</span>
+                                <button class="btn btn-success" onclick="joinRoom('${room.name}')">Join</button>
+                            `;
+                            roomsList.appendChild(roomItem);
+                        });
+                    }
+                } else {
+                    roomsList.innerHTML = '<li class="room-item">Error loading rooms</li>';
+                }
+            } catch (error) {
+                console.error('Error fetching rooms:', error);
+                roomsList.innerHTML = '<li class="room-item">Error loading rooms</li>';
+            }
+        }
+
+        function joinRoom(roomName) {
+            window.location.href = `templates/room.html?room=${encodeURIComponent(roomName)}`;
+        }
+
+        function goHome() {
+            window.location.href = 'index.html';
+        }
+    </script>
+</body>
+</html>
